@@ -19,13 +19,14 @@ extern tsize_t tsize;
 extern int restricted;
 
 /* File information */
-char **filenames;
-int current;
+char *filenames[256];
+int current = 1;
 int total;
 int fd;
 int filearg;
 int didpipe;
 struct stat info;
+int initial;
 
 /* Main logic */
 int rows;
@@ -48,27 +49,28 @@ int main(int argc, char **argv) {
     /* Process command line */
     for (i = 1; i < argc; i++) {
         switch (argv[i][0]) {
-            case '-':
-                if (strlen(argv[i]) != 1) {
-                    parse_opt(argv[i]);
-                    break;
-                }
-                else
+            case '+':
+                initial = atoi(argv[i] + 1);
+                break;
             default:
                 filearg = i;
+                total += argc - i;
                 i = argc;
                 break;
         }
     }
 
-    /* Copy filenames */
-    for (i = filearg; i < argc; i++, current++, total++) {
-        filenames[current] = malloc(sizeof(argv[i]));
-        memcpy(&filenames[current], argv[i], sizeof(argv[i]));
+    /* No input files */
+    if (total == 0) {
+        print("Missing input file(s)\n");
+        return EXIT_SUCCESS;
     }
 
-    /* No input files */
-    if (total == 0) print("Missing input file(s)\n");
+    /* Copy filenames */
+    for (i = filearg; i < argc; i++, current++) {
+        filenames[current] = malloc(strlen(argv[i]) + 1);
+        memcpy(filenames[current], argv[i], strlen(argv[i]) + 1);
+    }
 
     /* Just cat the file(s) if standard */
     /* output is not a terminal */
@@ -94,7 +96,7 @@ int main(int argc, char **argv) {
     bufferalloc(tsize.rows - 1, tsize.cols);
 
     /* Process files in a sequence */
-    for (; current < total; current++) {
+    for (current = 1; current < total + 1; current++) {
         more(filenames[current]);
     }
 
@@ -102,16 +104,6 @@ int main(int argc, char **argv) {
     tcsetattr(STDOUT_FILENO, TCSANOW, &tdef);
 
     return EXIT_SUCCESS;
-}
-
-void parse_opt(char *option) {
-    if (strlen(option) > 2)
-        printf("more: illegal option -- %s\n", option);
-    else {
-        switch (option[1]) {
-
-        }
-    }
 }
 
 void more(char *filename) {
@@ -129,7 +121,7 @@ void more(char *filename) {
         }
     }
     else {
-        if ((fd = open(filename, O_RDONLY)) != -1) {
+        if ((fd = open(filename, O_RDONLY | O_LARGEFILE)) != -1) {
             /* Determine file type */
             fstat(fd, &info);
             if (!S_ISREG(info.st_mode) && !S_ISFIFO(info.st_mode)) {
@@ -147,7 +139,8 @@ void more(char *filename) {
     }
 
     /* Main logic */
-    rows = tsize.rows - 1;
+    if (initial) initial--;
+    rows = initial + (tsize.rows - 1);
     direction = DOWN;
 
     for (;;) {
@@ -155,11 +148,14 @@ void more(char *filename) {
 
         switch (result) {
             case E0F:
-                if (total > 1 && current + 1 < total) prompt(result);
+                if (total > 1 && current < total) prompt(result);
                 return;
             case CONTINUE:
                 prompt(result);
                 break;
+            case ERROR:
+                prompt(ERROR);
+                return;
         }
     }
 }
