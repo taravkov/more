@@ -1,3 +1,5 @@
 # more
 
-*nix *more* utility. For educational purposes only.
+*nix *more* utility.
+
+For educational purposes only.
